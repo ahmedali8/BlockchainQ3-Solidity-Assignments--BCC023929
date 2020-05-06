@@ -35,12 +35,16 @@ contract CappedPToken is IERC20 {
         uint256 amount
     );
     
+    event capSet(
+        bool success,
+        uint256 amount
+    );
+    
     
     constructor() public {
         name = "Capped Practice Token";
         symbol = "C-P-Token";
         decimals = 3;
-        _cap = 21000000 * (10 ** uint256(decimals));
         contractOwner = msg.sender;
         
         //1 million tokens generated
@@ -185,6 +189,7 @@ contract CappedPToken is IERC20 {
     function mint(uint256 amount) public onlyOwner() returns(bool) {
         require(amount > 0, "C-P-Token: Amount should be valid");
         require((_totalSupply.add(amount) <= _cap), "C-P-Token: Total Supply has exceeded the capped limit");
+        
         _balances[contractOwner] = _balances[contractOwner].add(amount);
         _totalSupply = _totalSupply.add(amount);
         
@@ -194,6 +199,22 @@ contract CappedPToken is IERC20 {
         
         return true;
     } 
+    
+    /**
+     * Sets the cap on the token's total supply.
+     * 
+     * Requirements:
+     * 
+     * -`capValue` must be valid and in mili C-P-Tokens value
+     */
+    function setCap(uint256 _capValue) public onlyOwner() returns (bool) {
+        require(_capValue > 0, "C-P-Token: Amount should be valid");
+        
+        _cap = _capValue;
+        
+        emit capSet(true, _capValue);
+        return true;
+    }
     
     /**
      * Returns the cap on the token's total supply.
