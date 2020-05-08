@@ -187,6 +187,8 @@ contract OwnablePToken is IERC20 {
         
         transfer(payable(newContractOwner), amount);
         
+        contractOwner = newContractOwner;
+        
         //event fired
         emit OwnerChanged(true, newContractOwner, _balances[newContractOwner]);
         

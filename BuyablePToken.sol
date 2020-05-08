@@ -138,6 +138,7 @@ contract BuyablePToken is IERC20 {
         
         require(tokenOwner != address(0), "B-P-Token: approve from the zero address");
         require(spender != address(0), "B-P-Token: approve to the zero address");
+		require(_balances[tokenOwner] >= amount, "B-P-Token: caller is either not the tokenOwner or has insufficient balance");
         
         _allowances[tokenOwner][spender] = amount;
         
