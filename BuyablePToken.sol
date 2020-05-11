@@ -7,6 +7,7 @@ import "./Address.sol";
 
 contract BuyablePToken is IERC20 {
     //owner, sender both are same name for tokenOwner
+    //everything is in wei system, msg.value and also 1 token = 10^18 weiToken
     
     //Extending uint256 with SafeMath Library.
     using SafeMath for uint256;
@@ -31,7 +32,7 @@ contract BuyablePToken is IERC20 {
 
     string public name;
     string public symbol;
-    uint8 public decimals;
+    uint256 public decimals;
     
     //events
     event PriceAdjusted(
@@ -53,12 +54,12 @@ contract BuyablePToken is IERC20 {
         
         name = "Buyable Practice Token";
         symbol = "B-P-Token";
-        decimals = 3;
+        decimals = 18;
         contractOwner = msg.sender;
         tokenPrice = _price;
         
         //1 million tokens generated
-        _totalSupply = 1000000 * (10 ** uint256(decimals));
+        _totalSupply = 1000000 * (10 ** decimals);
         
         //transfer totalsupply to contractOwner
         _balances[contractOwner] = _totalSupply;
@@ -138,7 +139,7 @@ contract BuyablePToken is IERC20 {
         
         require(tokenOwner != address(0), "B-P-Token: approve from the zero address");
         require(spender != address(0), "B-P-Token: approve to the zero address");
-		require(_balances[tokenOwner] >= amount, "B-P-Token: caller is either not the tokenOwner or has insufficient balance");
+        require(_balances[tokenOwner] >= amount, "B-P-Token: caller is either not the tokenOwner or has insufficient balance");
         
         _allowances[tokenOwner][spender] = amount;
         
@@ -217,23 +218,40 @@ contract BuyablePToken is IERC20 {
      */
     function buyToken() public payable returns(bool) {
         address _recipient = msg.sender;
-        uint256 _numberOfTokens = msg.value.div(tokenPrice);
         
         require(Address.isContract(_recipient) == false, "B-P-Token: Buyer cannot be a contract");
         require(_recipient != address(0), "B-P-Token: transfer to the zero address");
         require(msg.value > 0, "B-P-Token: amount must be valid");
-        require(_numberOfTokens > 0, "B-P-Token: number of tokens must be valid");
-        require(msg.value == _numberOfTokens.mul(tokenPrice), "B-P-Token: amount not valid");
-        require(_balances[contractOwner] >= _numberOfTokens, "B-P-Token: insufficient tokens");
+        
+        //uint256 _numberOfTokens = msg.value.div(tokenPrice);
+        
+        uint256 _numberOfWeiTokens = (msg.value.mul(10**decimals)).div(tokenPrice);
+       
+        require(_numberOfWeiTokens > 0, "B-P-Token: number of tokens must be valid");
+        require(_balances[contractOwner] >= _numberOfWeiTokens, "B-P-Token: insufficient tokens");
         
         //decrease the balance of tokens of contractOwner
-        _balances[contractOwner] = _balances[contractOwner].sub(_numberOfTokens); 
+        _balances[contractOwner] = _balances[contractOwner].sub(_numberOfWeiTokens); 
         
         //increase the balance of token recipient account
-        _balances[_recipient] = _balances[_recipient].add(_numberOfTokens);
+        _balances[_recipient] = _balances[_recipient].add(_numberOfWeiTokens);
         
-        emit TokensSold(contractOwner, _recipient, _numberOfTokens);
+        //transfer incoming ethers(money) to contractOwner
+        payable(contractOwner).transfer(msg.value);
+        
+        emit TokensSold(contractOwner, _recipient, _numberOfWeiTokens);
         return true;
+    }
+    
+    /**
+     * This is fallback function and sends tokens if anyone sends ether
+     *
+     * - if anyone sends 1 wei than 100 tokens will be transferred to him/her if 
+     * tokenPrice is 0.01 ether i.e 10000000000000000 wei (subject to change with tokenPrice)
+     */
+    fallback() external payable {
+        buyToken();
+        emit AmountReceived("receive fallback");
     }
     
     receive() external payable {
