@@ -7,6 +7,7 @@ import "./Address.sol";
 
 contract BuyablePExtToken is IERC20 {
     //owner, sender both are same name for tokenOwner
+    //everything is in wei system, msg.value and also 1 token = 10^18 weiToken
     
     //Extending uint256 with SafeMath Library.
     using SafeMath for uint256;
@@ -36,7 +37,7 @@ contract BuyablePExtToken is IERC20 {
 
     string public name;
     string public symbol;
-    uint8 public decimals;
+    uint256 public decimals;
     
     //events
     event PriceAdjusted(
@@ -70,12 +71,12 @@ contract BuyablePExtToken is IERC20 {
         
         name = "Buyable-Extension Practice Token";
         symbol = "B-Ex-P-Token";
-        decimals = 3;
+        decimals = 18;
         contractOwner = msg.sender;
         tokenPrice = _price;
         
         //1 million tokens generated
-        _totalSupply = 1000000 * (10 ** uint256(decimals));
+        _totalSupply = 1000000 * (10 ** decimals);
         
         //transfer totalsupply to contractOwner
         _balances[contractOwner] = _totalSupply;
@@ -235,25 +236,31 @@ contract BuyablePExtToken is IERC20 {
      */
     function buyToken() public payable returns(bool) {
         address _recipient = msg.sender;
-        uint256 _numberOfTokens = msg.value.div(tokenPrice);
         
-        require(Address.isContract(_recipient) == false, "B-Ex-P-Token: Buyer cannot be a contract");
-        require(_recipient != address(0), "B-Ex-P-Token: transfer to the zero address");
-        require(msg.value > 0, "B-Ex-P-Token: amount must be valid");
-        require(_numberOfTokens > 0, "B-Ex-P-Token: number of tokens must be valid");
-        require(msg.value == _numberOfTokens.mul(tokenPrice), "B-Ex-P-Token: amount not valid");
-        require(_balances[contractOwner] >= _numberOfTokens, "B-Ex-P-Token: insufficient tokens");
+        require(Address.isContract(_recipient) == false, "B-P-Token: Buyer cannot be a contract");
+        require(_recipient != address(0), "B-P-Token: transfer to the zero address");
+        require(msg.value > 0, "B-P-Token: amount must be valid");
+        
+        //uint256 _numberOfTokens = msg.value.div(tokenPrice);
+        
+        uint256 _numberOfWeiTokens = (msg.value.mul(10**decimals)).div(tokenPrice);
+       
+        require(_numberOfWeiTokens > 0, "B-P-Token: number of tokens must be valid");
+        require(_balances[contractOwner] >= _numberOfWeiTokens, "B-P-Token: insufficient tokens");
         
         //decrease the balance of tokens of contractOwner
-        _balances[contractOwner] = _balances[contractOwner].sub(_numberOfTokens); 
+        _balances[contractOwner] = _balances[contractOwner].sub(_numberOfWeiTokens); 
         
         //increase the balance of token recipient account
-        _balances[_recipient] = _balances[_recipient].add(_numberOfTokens);
+        _balances[_recipient] = _balances[_recipient].add(_numberOfWeiTokens);
+        
+        //transfer incoming ethers(money) to contractOwner
+        payable(contractOwner).transfer(msg.value);
         
         //saving the timestamp for later return check
         timeOfBoughtTokens[_recipient] = block.timestamp;
         
-        emit TokensSold(contractOwner, _recipient, _numberOfTokens);
+        emit TokensSold(contractOwner, _recipient, _numberOfWeiTokens);
         return true;
     }
     
@@ -306,21 +313,33 @@ contract BuyablePExtToken is IERC20 {
      * - numberOfTokens must be valid
      * - can return only within a month
      */
-    function returnToken(uint256 _numberOfTokens) public returns(bool) {
+    function returnToken(uint256 _numberOfWeiTokens) public returns(bool) {
         address tokenOwner = msg.sender;
         
         require(tokenOwner != address(0), "B-Ex-P-Token: caller cannot be zero address");
-        require(_balances[tokenOwner] >= _numberOfTokens, "B-Ex-P-Token: caller is either not the tokenOwner or has insufficient balance");
-        require(block.timestamp >= (timeOfBoughtTokens[tokenOwner]).add(2592000)); //1 month = 2592000 secs
+        require(_balances[tokenOwner] >= _numberOfWeiTokens, "B-Ex-P-Token: caller is either not the tokenOwner or has insufficient balance");
+        
+        require(block.timestamp >= (timeOfBoughtTokens[tokenOwner]).add(300), "B-Ex-P-Token: Return only possible within the limited time"); //1 month = 2592000 secs
         
         //converts numberOfTokens to value(money) based on current tokenPrice
-        uint256 _amount = _numberOfTokens.mul(tokenPrice);
+        uint256 _amount = _numberOfWeiTokens.mul(tokenPrice);
         
         //transfers tokens back to contractOwner 
-        transfer(contractOwner, _numberOfTokens);
+        transfer(contractOwner, _numberOfWeiTokens);
         
         //transfers money back to the tokenOwner
         payable(tokenOwner).transfer(_amount);
+    }
+    
+    /**
+     * This is fallback function and sends tokens if anyone sends ether
+     *
+     * - if anyone sends 1 wei than 100 tokens will be transferred to him/her if 
+     * tokenPrice is 0.01 ether i.e 10000000000000000 wei (subject to change with tokenPrice)
+     */
+    fallback() external payable {
+        buyToken();
+        emit AmountReceived("fallback");
     }
     
     receive() external payable {
