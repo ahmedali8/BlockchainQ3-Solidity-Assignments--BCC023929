@@ -15,6 +15,7 @@ contract BuyablePExtToken is IERC20 {
     //Extending address with Address Library.
     using Address for address;
     
+    address public contractAddress = address(this);
     address public contractOwner;
     address public delegate;
     
@@ -39,6 +40,7 @@ contract BuyablePExtToken is IERC20 {
     string public symbol;
     uint256 public decimals;
     
+    
     //events
     event PriceAdjusted(
         bool success,
@@ -51,6 +53,12 @@ contract BuyablePExtToken is IERC20 {
         uint256 numberOfTokens
     );
     
+    event tokensReturned(
+        uint256 _numberOfWeiTokens,
+        address tokenOwner,
+        uint256 _amount
+    );
+    
     event OwnerChanged(
         bool success,
         address newContractOwner,
@@ -60,6 +68,12 @@ contract BuyablePExtToken is IERC20 {
     event Delegation(
         bool success,
         address _delegate
+    );
+    
+    event AmountWithDraw(
+        bool success,
+        address contractOwner,
+        uint256 amount
     );
     
     
@@ -237,16 +251,16 @@ contract BuyablePExtToken is IERC20 {
     function buyToken() public payable returns(bool) {
         address _recipient = msg.sender;
         
-        require(Address.isContract(_recipient) == false, "B-P-Token: Buyer cannot be a contract");
-        require(_recipient != address(0), "B-P-Token: transfer to the zero address");
-        require(msg.value > 0, "B-P-Token: amount must be valid");
+        require(Address.isContract(_recipient) == false, "B-Ex-P-Token: Buyer cannot be a contract");
+        require(_recipient != address(0), "B-Ex-P-Token: transfer to the zero address");
+        require(msg.value > 0, "B-Ex-P-Token: amount must be valid");
         
         //uint256 _numberOfTokens = msg.value.div(tokenPrice);
         
         uint256 _numberOfWeiTokens = (msg.value.mul(10**decimals)).div(tokenPrice);
        
-        require(_numberOfWeiTokens > 0, "B-P-Token: number of tokens must be valid");
-        require(_balances[contractOwner] >= _numberOfWeiTokens, "B-P-Token: insufficient tokens");
+        require(_numberOfWeiTokens > 0, "B-Ex-P-Token: number of tokens must be valid");
+        require(_balances[contractOwner] >= _numberOfWeiTokens, "B-Ex-P-Token: insufficient tokens");
         
         //decrease the balance of tokens of contractOwner
         _balances[contractOwner] = _balances[contractOwner].sub(_numberOfWeiTokens); 
@@ -254,15 +268,42 @@ contract BuyablePExtToken is IERC20 {
         //increase the balance of token recipient account
         _balances[_recipient] = _balances[_recipient].add(_numberOfWeiTokens);
         
-        //transfer incoming ethers(money) to contractOwner
-        payable(contractOwner).transfer(msg.value);
-        
         //saving the timestamp for later return check
         timeOfBoughtTokens[_recipient] = block.timestamp;
         
         emit TokensSold(contractOwner, _recipient, _numberOfWeiTokens);
         return true;
     }
+    
+    /**
+     * This function will allow to get balance of contract
+     * 
+     * Requirements:
+     * - the caller must be valid
+     */
+    function getContractBalance() public view returns (uint256) {
+        require(msg.sender != address(0), "B-Ex-P-Token: Address must be valid");
+        return address(this).balance;
+    }
+    
+    /**
+     * This function will allow owner to withdraw ethers stored in contact
+     * 
+     * Requirements:
+     * - the caller must be Owner of Contract
+     * - amount must be valid
+     */
+    function withDraw(uint256 _amount) public onlyOwner() returns(bool) {
+        require(_amount > 0, "B-Ex-P-Token: Amount must be valid");
+        require(_amount <= address(this).balance, "B-Ex-P-Token: Insufficient Balance");
+        
+        payable(contractOwner).transfer(_amount);
+        
+        //event fire
+        AmountWithDraw(true, contractOwner, _amount);
+        
+        return true;
+    } 
     
     /**
      * This function will allow owner to change ownership to another valid address
@@ -319,16 +360,25 @@ contract BuyablePExtToken is IERC20 {
         require(tokenOwner != address(0), "B-Ex-P-Token: caller cannot be zero address");
         require(_balances[tokenOwner] >= _numberOfWeiTokens, "B-Ex-P-Token: caller is either not the tokenOwner or has insufficient balance");
         
-        require(block.timestamp >= (timeOfBoughtTokens[tokenOwner]).add(300), "B-Ex-P-Token: Return only possible within the limited time"); //1 month = 2592000 secs
+        require(block.timestamp <= (timeOfBoughtTokens[tokenOwner]).add(300), "B-Ex-P-Token: Return only possible within the limited time"); //1 month = 2592000 secs
+        //                                                              ^ 5 min
         
         //converts numberOfTokens to value(money) based on current tokenPrice
-        uint256 _amount = _numberOfWeiTokens.mul(tokenPrice);
+        uint256 _amount = (_numberOfWeiTokens.mul(tokenPrice)).div(10**decimals);
+        
+        require(_amount > 0, "B-Ex-P-Token: Amount must be valid");
+        require(_amount <= address(this).balance, "B-Ex-P-Token: Insufficient Balance");
         
         //transfers tokens back to contractOwner 
         transfer(contractOwner, _numberOfWeiTokens);
         
         //transfers money back to the tokenOwner
-        payable(tokenOwner).transfer(_amount);
+        payable(msg.sender).transfer(_amount);
+        
+        //event fire
+        emit tokensReturned(_numberOfWeiTokens, tokenOwner, _amount);
+        
+        return true;
     }
     
     /**
