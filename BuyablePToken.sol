@@ -253,9 +253,4 @@ contract BuyablePToken is IERC20 {
         buyToken();
         emit AmountReceived("receive fallback");
     }
-    
-    receive() external payable {
-        buyToken();
-        emit AmountReceived("receive fallback");
-    }
 }
