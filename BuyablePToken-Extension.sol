@@ -26,8 +26,11 @@ contract BuyablePExtToken is IERC20 {
     //      tokenOwner           spender    amount
     mapping (address => mapping (address => uint256)) private _allowances;
     
-    //mapping to keep time when token is bought
-    mapping (address => uint256) public timeOfBoughtTokens;
+    //mapping to keep time when tokens are bought
+    mapping (address => mapping(uint256 => uint256)) public timeOfBoughtTokens;
+    
+    //mapping to keep track of tokens bought in batches
+    mapping (address => mapping(uint256 => uint256)) public tokensBoughtInBatches;
     
     
     //the amount of tokens in existence
@@ -75,7 +78,6 @@ contract BuyablePExtToken is IERC20 {
         address contractOwner,
         uint256 amount
     );
-    
     
     event AmountReceived(string);
     
@@ -251,7 +253,7 @@ contract BuyablePExtToken is IERC20 {
     function buyToken() public payable returns(bool) {
         address _recipient = msg.sender;
         
-        require(Address.isContract(_recipient) == false, "B-Ex-P-Token: Buyer cannot be a contract");
+        require(_recipient.isContract() == false, "B-Ex-P-Token: Buyer cannot be a contract");
         require(_recipient != address(0), "B-Ex-P-Token: transfer to the zero address");
         require(msg.value > 0, "B-Ex-P-Token: amount must be valid");
         
@@ -268,8 +270,11 @@ contract BuyablePExtToken is IERC20 {
         //increase the balance of token recipient account
         _balances[_recipient] = _balances[_recipient].add(_numberOfWeiTokens);
         
-        //saving the timestamp for later return check
-        timeOfBoughtTokens[_recipient] = block.timestamp;
+        //saving the timestamp for later returnToken check
+        timeOfBoughtTokens[_recipient][_numberOfWeiTokens] = block.timestamp;
+        
+        //saving tokens bought at this time
+        tokensBoughtInBatches[_recipient][block.timestamp] = _numberOfWeiTokens;
         
         emit TokensSold(contractOwner, _recipient, _numberOfWeiTokens);
         return true;
@@ -354,29 +359,42 @@ contract BuyablePExtToken is IERC20 {
      * - numberOfTokens must be valid
      * - can return only within a month
      */
-    function returnToken(uint256 _numberOfWeiTokens) public returns(bool) {
+    function returnToken(uint256  _numberOfWeiTokensBoughtInBatch, uint256 _numberOfWeiTokensToReturn) public returns(bool) {
         address tokenOwner = msg.sender;
         
-        require(tokenOwner != address(0), "B-Ex-P-Token: caller cannot be zero address");
-        require(_balances[tokenOwner] >= _numberOfWeiTokens, "B-Ex-P-Token: caller is either not the tokenOwner or has insufficient balance");
+        uint256 _boughtTime = timeOfBoughtTokens[tokenOwner][_numberOfWeiTokensBoughtInBatch];
+        uint256 _tokensBoughtInBatch = tokensBoughtInBatches[tokenOwner][_boughtTime];
         
-        require(block.timestamp <= (timeOfBoughtTokens[tokenOwner]).add(300), "B-Ex-P-Token: Return only possible within the limited time"); //1 month = 2592000 secs
+        require(tokenOwner != address(0), "B-Ex-P-Token: caller cannot be zero address");
+        require(_numberOfWeiTokensToReturn < _tokensBoughtInBatch, "B-Ex-P-Token: Invalid token value to be returned, must be less than or equal to the tokens bought in batch");
+        require(_balances[tokenOwner] >= _numberOfWeiTokensToReturn, "B-Ex-P-Token: caller is either not the tokenOwner or has insufficient balance");
+        require(block.timestamp <= (_boughtTime).add(300), "B-Ex-P-Token: Return only possible within the limited time"); //1 month = 2592000 secs
         //                                                              ^ 5 min
         
         //converts numberOfTokens to value(money) based on current tokenPrice
-        uint256 _amount = (_numberOfWeiTokens.mul(tokenPrice)).div(10**decimals);
+        uint256 _amount = (_numberOfWeiTokensToReturn.mul(tokenPrice)).div(10**decimals);
         
         require(_amount > 0, "B-Ex-P-Token: Amount must be valid");
         require(_amount <= address(this).balance, "B-Ex-P-Token: Insufficient Balance");
         
         //transfers tokens back to contractOwner 
-        transfer(contractOwner, _numberOfWeiTokens);
+        transfer(contractOwner, _numberOfWeiTokensToReturn);
         
         //transfers money back to the tokenOwner
         payable(msg.sender).transfer(_amount);
         
         //event fire
-        emit tokensReturned(_numberOfWeiTokens, tokenOwner, _amount);
+        emit tokensReturned(_numberOfWeiTokensToReturn, tokenOwner, _amount);
+        
+        
+        //updating the timestamp for later returnToken check
+        delete timeOfBoughtTokens[tokenOwner][_numberOfWeiTokensBoughtInBatch];
+        timeOfBoughtTokens[tokenOwner][_numberOfWeiTokensToReturn] = block.timestamp;
+        
+        //updating tokens bought at this time
+        delete tokensBoughtInBatches[tokenOwner][_boughtTime];
+        tokensBoughtInBatches[tokenOwner][block.timestamp] = _numberOfWeiTokensToReturn;
+        
         
         return true;
     }
@@ -391,10 +409,4 @@ contract BuyablePExtToken is IERC20 {
         buyToken();
         emit AmountReceived("fallback");
     }
-    
-    receive() external payable {
-        buyToken();
-        emit AmountReceived("receive fallback");
-    }
-    
 }
