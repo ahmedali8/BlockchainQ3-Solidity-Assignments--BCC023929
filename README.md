@@ -13,3 +13,18 @@ Assignments includes:
    * TimeBoundPToken
    * BuyablePToken
    * BuyablePToken-Extension
+
+2. ERC721 Tokens
+   * IERC165 (Interface)
+   * IERC721 (Interface)
+   * IERC721Metadata (Interface)
+   * SafeMath (library)
+   * Address (library)
+   * Strings (library)
+   * ERC165
+   * ERC721
+   * PTown
+   * BREAgency (Main Asgn file)
+   * BREAgency-OZV (Main Asgn OpenZeppelin Version)
+   
+3. Web3.js Tutorial
