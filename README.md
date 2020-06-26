@@ -28,3 +28,7 @@ Assignments includes:
    * BREAgency-OZV (Main Asgn OpenZeppelin Version)
    
 3. Web3.js Tutorial
+   * Using node version: v12.17.0
+   * Using npm version: v6.14.4
+   * Using web3 version: v1.2.9
+   * Using ethereumjs-tx version: v2.1.2
